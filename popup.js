@@ -79,7 +79,7 @@ async function renderPages() {
 
 saveButton.addEventListener("click", async () => {
   saveButton.disabled = true;
-  showStatus("正在读取当前网页……");
+  showStatus("正在提取文章正文……");
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !/^https?:\/\//.test(tab.url ?? "")) {
@@ -87,18 +87,44 @@ saveButton.addEventListener("click", async () => {
     }
 
     // Runs only after the user presses the button, in the current tab.
+    // Readability.js is a packaged local dependency, so collection never needs a CDN.
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["vendor/Readability.js"]
+    });
+
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: (limit) => {
-        const root =
-          document.querySelector("article") ||
-          document.querySelector("main") ||
-          document.body;
-        return {
-          title: document.title || "无标题",
-          url: location.href,
-          text: (root?.innerText || "").trim().slice(0, limit)
+        const fallback = () => {
+          const root =
+            document.querySelector("article") ||
+            document.querySelector("main") ||
+            document.body;
+
+          return {
+            title: document.title || "无标题",
+            url: location.href,
+            text: (root?.innerText || "").trim().slice(0, limit)
+          };
         };
+
+        try {
+          // Parse a copy so Readability never changes the live page DOM.
+          const article = new Readability(document.cloneNode(true)).parse();
+          const text = (article?.textContent || "").trim();
+          if (text) {
+            return {
+              title: (article.title || document.title || "无标题").trim(),
+              url: location.href,
+              text: text.slice(0, limit)
+            };
+          }
+        } catch (error) {
+          console.warn("Readability failed; using the basic text extractor.", error);
+        }
+
+        return fallback();
       },
       args: [MAX_TEXT_LENGTH]
     });

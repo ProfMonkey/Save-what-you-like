@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "收一下 - Save What You Like",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Save text from web pages for offline reading, locally.",
   "permissions": ["activeTab", "scripting", "storage"],
   "action": {
